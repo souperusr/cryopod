@@ -1,0 +1,12 @@
+[default]
+name=Default
+runtime=podman:e4b02aa1cc4df99c3b964aa3db91b3870bd27bf9a47e2d519c27ac91aaa5cda4
+toolchain=default
+config-opts=
+run-opts=
+prefix=/var/home/mrandazzo/Projects/.gnome-builder/projects/cryopod/install/podman-e4b02aa1cc4df99c3b964aa3db91b3870bd27bf9a47e2d519c27ac91aaa5cda4
+app-id=
+postbuild=
+prebuild=
+run-command=
+default=true

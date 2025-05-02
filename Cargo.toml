@@ -1,0 +1,14 @@
+[package]
+name = "cryopod"
+version = "0.1.0"
+edition = "2021"
+build = "src/build.rs"
+
+[dependencies]
+clap = { version = "4.5.35", features = ["derive"] }
+color-eyre = "0.6.3"
+directories = "6.0.0"
+serde_json = "1.0.140"
+thiserror = "2.0.12"
+tokio = { version = "1.44.2", features = ["full"] }
+users = "0.11.0"
