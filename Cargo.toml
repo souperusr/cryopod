@@ -8,6 +8,9 @@ build = "src/build.rs"
 clap = { version = "4.5.35", features = ["derive"] }
 color-eyre = "0.6.3"
 directories = "6.0.0"
+httparse = "1.10.1"
+log = "0.4.27"
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 thiserror = "2.0.12"
 tokio = { version = "1.44.2", features = ["full"] }

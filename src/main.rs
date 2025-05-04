@@ -4,10 +4,9 @@ mod backend;
 mod constants;
 mod podman;
 
-use crate::backend::ContainerBackend;
 use crate::podman::PodmanBackend;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, Args};
 use color_eyre::eyre::Result;
@@ -37,17 +36,15 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let cryopod = cryopod::Cryopod::new()?;
-
     let mut backend = PodmanBackend::new().await?;
-    backend.run(&Path::new("path!")).await?;
+    let _ = backend.run().await?;
 
     match &cli.command {
         Some(Commands::Enter) => {
-            cryopod.develop();
+            //cryopod.develop();
         }
         Some(Commands::Develop(develop_args)) => {
-            cryopod.develop();
+            //cryopod.develop();
         }
         None => {
             println!("No subcommand specified. See `--help` for command information.");

@@ -1,3 +1,5 @@
+use super::request::*;
+
 use std::path::PathBuf;
 
 use tokio::net::unix::uid_t;
@@ -5,6 +7,8 @@ use tokio::net::UnixStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use serde_json as json;
+
+const API_VERSION: &'static str = "v5.0.0";
 
 /// An opaque handle to the podman.sock file. Use .get() to fetch a handle, and Into<PathBuf> to access the path.
 enum PodmanSockFileHandle {
@@ -50,10 +54,16 @@ pub enum PodmanSockErr {
     NoPodmanSock,
 
     #[error("Cannot connect to podman socket")]
-    PodmanSockConnect(#[source] std::io::Error),
+    PodmanSockConnect(#[from] std::io::Error),
 
-    #[error("Unable to send request to podman")]
-    SendRequest(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("Unable to parse podman response")]
+    ParseHttp(#[from] httparse::Error),
+
+    #[error("No body found in podman response")]
+    NoHttpBody,
+
+    #[error("Unable to parse podman response")]
+    ParseJson(#[from] json::Error)
 }
 
 type Error = PodmanSockErr;
@@ -72,30 +82,45 @@ impl PodmanSocket {
         Ok(Self(stream))
     }
 
-    pub async fn send_request(&mut self, request_path: &str) -> Result<json::Value, Error> {
-        let request = format!(
-            "GET /v5.0.0{} HTTP/1.1\r\n\
+    pub async fn send_request<T: PodmanRequest>(&mut self, request: T) -> Result<PodmanResponse<T::Response>, Error> {
+        let full_request = format!(
+            "{} /{}/libpod{} HTTP/1.1\r\n\
             Host: localhost\r\n\
             \r\n",
-            request_path
-        );
+            T::REQUEST_METHOD,
+            API_VERSION,
+            request.get_request()
+        ).into_bytes();
 
-        self.0.write_all(&request.into_bytes())
-            .await
-            .map_err(|err| Error::SendRequest(Box::new(err)))?;
+        self.0.write_all(&full_request).await?;
 
-        let mut response: String = String::new();
-        self.0.read_to_string(&mut response)
-            .await
-            .map_err(|err| Error::SendRequest(Box::new(err)))?;
+        let mut response_bytes: Vec<u8> = Vec::with_capacity(512);
+        loop {
+            let n_bytes = self.0.read_buf(&mut response_bytes).await?;
+            if n_bytes == 0 {
+                break;
+            }
+        }
 
-        let res_body = response.splitn(2, "\r\n\r\n")
-            .nth(1)
-            .unwrap_or("");
+        // Parse http response
+        let mut headers = [httparse::EMPTY_HEADER; 16];
+        let mut response = httparse::Response::new(&mut headers);
+        let _ = response.parse(&response_bytes)?;
 
-        let json: json::Value = serde_json::from_str(&res_body)
-            .map_err(|err| Error::SendRequest(Box::new(err)))?;
+        let headers_end = response_bytes
+            .windows(4)
+            .position(|seq| seq == b"\r\n\r\n")
+            .ok_or(Error::NoHttpBody)? + 4;
 
-        return Ok(json);
+        let body = &response_bytes[headers_end..];
+        let status_code = response.code.ok_or(Error::NoHttpBody)?; //TODO change error type here
+
+        if status_code >= 200 && status_code < 300 {
+            let response: T::Response = json::from_slice(body)?;
+            Ok(PodmanResponse { status_code, response: Ok(response)})
+        } else {
+            let response: ResponseError = json::from_slice(body)?;
+            Ok(PodmanResponse { status_code, response: Err(response) })
+        }
     }
 }
